@@ -92,31 +92,12 @@ const SlideRenderer = forwardRef<HTMLDivElement, SlideRendererProps>(({ data, br
 
   const renderParagraph = (text: string, idx: number) => {
     if (!text) return null;
-    const trimmed = text.trim();
+    const trimmedBlock = text.trim();
 
-    // Markdown Header Logic
-    if (trimmed.startsWith('## ')) {
-      return (
-        <div key={idx} className="mt-6 mb-5">
-          <h3 className="text-[24px] font-black text-slate-900 leading-tight tracking-tight">
-            {trimmed.replace(/^##\s+/, '')}
-          </h3>
-          <div className="w-12 h-1.5 bg-rose-500 mt-3 rounded-full"></div>
-        </div>
-      );
-    }
-    if (trimmed.startsWith('### ')) {
-      return (
-        <h4 key={idx} className="text-[18px] font-black text-slate-800 mt-6 mb-3 leading-snug flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block"></span>
-          {trimmed.replace(/^###\s+/, '')}
-        </h4>
-      );
-    }
-
-    // Table Logic
-    if (trimmed.startsWith('|') && (trimmed.includes('|---') || trimmed.includes('| ---') || trimmed.includes('|:---'))) {
-      const rows = trimmed.split('\n').filter(r => r.trim() !== '');
+    // 1. Table Logic (Block Level)
+    // Check if block looks like a table (multiple lines, pipe chars)
+    if (trimmedBlock.startsWith('|') && (trimmedBlock.includes('|---') || trimmedBlock.includes('| ---') || trimmedBlock.includes('|:---'))) {
+      const rows = trimmedBlock.split('\n').filter(r => r.trim() !== '');
       const tableRows = rows.filter(r => !r.includes('---'));
       if (tableRows.length === 0) return null;
 
@@ -143,31 +124,64 @@ const SlideRenderer = forwardRef<HTMLDivElement, SlideRendererProps>(({ data, br
             </tbody>
           </table>
         </div>
-      )
+      );
     }
 
-    // Numbered List
-    if (/^\d+\./.test(trimmed)) {
-      return (
-        <p key={idx} className="text-slate-800 text-[15px] leading-[1.6] font-medium text-justify tracking-wide mb-4 pl-0 whitespace-pre-wrap">
-          {trimmed.split(/(\*\*.*?\*\*)/).map((part, i) =>
-            part.startsWith('**') && part.endsWith('**') ?
-              <span key={i} className="font-extrabold text-black">{part.slice(2, -2)}</span> :
-              part
-          )}
-        </p>
-      )
-    }
+    // 2. Line-by-Line Rendering
+    // Split block by newlines to handle "Internal Lines"
+    const lines = text.split('\n');
 
-    // Standard Paragraph
     return (
-      <p key={idx} className="text-slate-700 text-[15px] leading-[1.5] font-medium text-justify tracking-wide mb-5 whitespace-pre-wrap">
-        {text.split(/(\*\*.*?\*\*)/).map((part, i) =>
-          part.startsWith('**') && part.endsWith('**') ?
-            <span key={i} className="font-extrabold text-slate-900 bg-rose-50/80 px-1 mx-0.5 rounded-sm border-b-2 border-rose-100">{part.slice(2, -2)}</span> :
-            part
-        )}
-      </p>
+      <div key={idx} className="mb-5 last:mb-0">
+        {lines.map((line, lineIdx) => {
+          const trimmed = line.trim();
+          if (!trimmed) return null;
+
+          // Header H3
+          if (trimmed.startsWith('## ')) {
+            return (
+              <div key={lineIdx} className="mt-4 mb-3">
+                <h3 className="text-[24px] font-black text-slate-900 leading-tight tracking-tight">
+                  {trimmed.replace(/^##\s+/, '')}
+                </h3>
+                <div className="w-12 h-1.5 bg-rose-500 mt-2 rounded-full"></div>
+              </div>
+            );
+          }
+          // Header H4
+          if (trimmed.startsWith('### ')) {
+            return (
+              <h4 key={lineIdx} className="text-[18px] font-black text-slate-800 mt-4 mb-2 leading-snug flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block"></span>
+                {trimmed.replace(/^###\s+/, '')}
+              </h4>
+            );
+          }
+          // Numbered List
+          if (/^\d+\./.test(trimmed)) {
+            return (
+              <p key={lineIdx} className="text-slate-800 text-[15px] leading-[1.6] font-medium text-justify tracking-wide mb-2 pl-0 whitespace-pre-wrap">
+                {trimmed.split(/(\*\*.*?\*\*)/).map((part, i) =>
+                  part.startsWith('**') && part.endsWith('**') ?
+                    <span key={i} className="font-extrabold text-black">{part.slice(2, -2)}</span> :
+                    part
+                )}
+              </p>
+            );
+          }
+
+          // Standard Paragraph Line
+          return (
+            <p key={lineIdx} className="text-slate-700 text-[15px] leading-[1.5] font-medium text-justify tracking-wide mb-1 whitespace-pre-wrap">
+              {trimmed.split(/(\*\*.*?\*\*)/).map((part, i) =>
+                part.startsWith('**') && part.endsWith('**') ?
+                  <span key={i} className="font-extrabold text-slate-900 bg-rose-50/80 px-1 mx-0.5 rounded-sm border-b-2 border-rose-100">{part.slice(2, -2)}</span> :
+                  part
+              )}
+            </p>
+          );
+        })}
+      </div>
     );
   };
 
