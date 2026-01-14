@@ -14,6 +14,15 @@ app.use(cors());
 app.use(express.json());
 
 // --- CONFIGURATION ---
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// --- CONFIGURATION ---
 
 const SYSTEM_INSTRUCTION = `
 You are a strict text formatting engine. 
@@ -227,6 +236,11 @@ CRITICAL:
         console.error("Generation Error:", error);
         res.status(500).json({ error: error.message || "Internal Server Error" });
     }
+});
+
+// --- PRODUCTION SERVE ---
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.listen(port, () => {
