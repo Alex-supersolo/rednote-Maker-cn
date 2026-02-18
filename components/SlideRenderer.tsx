@@ -91,6 +91,62 @@ const SlideRenderer = forwardRef<HTMLDivElement, SlideRendererProps>(({ data, br
     </div>
   );
 
+  const renderInlineMarkdown = (line: string, variant: 'normal' | 'list' = 'normal') => {
+    const tokenRegex = /(\[[^\]]+\]\((?:https?:\/\/|mailto:)[^)]+\)|`[^`]+`|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|\*[^*\n]+\*|_[^_\n]+_)/g;
+    const parts = line.split(tokenRegex);
+
+    return parts.map((part, i) => {
+      if (!part) return null;
+
+      const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if (linkMatch) {
+        return (
+          <a key={i} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="text-rose-600 underline decoration-rose-300 hover:text-rose-700">
+            {linkMatch[1]}
+          </a>
+        );
+      }
+
+      if (part.startsWith('`') && part.endsWith('`')) {
+        return (
+          <code key={i} className="font-mono text-[0.92em] bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded border border-slate-200">
+            {part.slice(1, -1)}
+          </code>
+        );
+      }
+
+      if ((part.startsWith('***') && part.endsWith('***')) || (part.startsWith('___') && part.endsWith('___'))) {
+        return (
+          <span key={i} className={variant === 'list' ? 'font-black italic text-black' : 'font-black italic text-slate-900 bg-rose-50/80 px-1 mx-0.5 rounded-sm border-b-2 border-rose-100'}>
+            {part.slice(3, -3)}
+          </span>
+        );
+      }
+
+      if ((part.startsWith('**') && part.endsWith('**')) || (part.startsWith('__') && part.endsWith('__'))) {
+        return (
+          <span key={i} className={variant === 'list' ? 'font-extrabold text-black' : 'font-extrabold text-slate-900 bg-rose-50/80 px-1 mx-0.5 rounded-sm border-b-2 border-rose-100'}>
+            {part.slice(2, -2)}
+          </span>
+        );
+      }
+
+      if (part.startsWith('~~') && part.endsWith('~~')) {
+        return (
+          <span key={i} className="line-through text-slate-400">
+            {part.slice(2, -2)}
+          </span>
+        );
+      }
+
+      if ((part.startsWith('*') && part.endsWith('*')) || (part.startsWith('_') && part.endsWith('_'))) {
+        return <em key={i}>{part.slice(1, -1)}</em>;
+      }
+
+      return part;
+    });
+  };
+
   const renderParagraph = (text: string, idx: number) => {
     if (!text) return null;
     const trimmedBlock = text.trim();
@@ -131,61 +187,135 @@ const SlideRenderer = forwardRef<HTMLDivElement, SlideRendererProps>(({ data, br
     // 2. Line-by-Line Rendering
     // Split block by newlines to handle "Internal Lines"
     const lines = text.split('\n');
+    const renderedLines: React.ReactNode[] = [];
+    let i = 0;
 
-    return (
-      <div key={idx} className="mb-4 last:mb-0">
-        {lines.map((line, lineIdx) => {
-          const trimmed = line.trim();
-          if (!trimmed) {
-            return <div key={lineIdx} className="h-4" />;
-          }
+    while (i < lines.length) {
+      const line = lines[i];
+      const trimmed = line.trim();
 
-          // Header H3
-          if (trimmed.startsWith('## ')) {
-            return (
-              <div key={lineIdx} className="mt-4 mb-3">
-                <h3 className="text-[24px] font-black text-slate-900 leading-tight tracking-tight">
-                  {trimmed.replace(/^##\s+/, '')}
-                </h3>
-                <div className="w-12 h-1.5 bg-rose-500 mt-2 rounded-full"></div>
-              </div>
-            );
-          }
-          // Header H4
-          if (trimmed.startsWith('### ')) {
-            return (
-              <h4 key={lineIdx} className="text-[18px] font-black text-slate-800 mt-4 mb-2 leading-snug flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block"></span>
-                {trimmed.replace(/^###\s+/, '')}
-              </h4>
-            );
-          }
-          // Numbered List
-          if (/^\d+\./.test(trimmed)) {
-            return (
-              <p key={lineIdx} className="text-slate-800 text-[15px] leading-[1.6] font-medium text-justify tracking-wide mb-1 pl-0 whitespace-pre-wrap">
-                {trimmed.split(/(\*\*.*?\*\*)/).map((part, i) =>
-                  part.startsWith('**') && part.endsWith('**') ?
-                    <span key={i} className="font-extrabold text-black">{part.slice(2, -2)}</span> :
-                    part
-                )}
-              </p>
-            );
-          }
+      if (!trimmed) {
+        renderedLines.push(<div key={`sp-${idx}-${i}`} className="h-4" />);
+        i++;
+        continue;
+      }
 
-          // Standard Paragraph Line
-          return (
-            <p key={lineIdx} className="text-slate-700 text-[15px] leading-[1.5] font-medium text-justify tracking-wide mb-1 whitespace-pre-wrap">
-              {trimmed.split(/(\*\*.*?\*\*)/).map((part, i) =>
-                part.startsWith('**') && part.endsWith('**') ?
-                  <span key={i} className="font-extrabold text-slate-900 bg-rose-50/80 px-1 mx-0.5 rounded-sm border-b-2 border-rose-100">{part.slice(2, -2)}</span> :
-                  part
-              )}
-            </p>
-          );
-        })}
-      </div>
-    );
+      if (trimmed.startsWith('```')) {
+        const codeLines: string[] = [];
+        const lang = trimmed.replace(/^```/, '').trim();
+        i++;
+        while (i < lines.length && !lines[i].trim().startsWith('```')) {
+          codeLines.push(lines[i]);
+          i++;
+        }
+        if (i < lines.length) i++;
+        renderedLines.push(
+          <div key={`code-${idx}-${i}`} className="my-3 rounded-lg border border-slate-200 bg-slate-900 text-slate-100 overflow-hidden">
+            {lang && <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider bg-slate-800 text-slate-300">{lang}</div>}
+            <pre className="p-3 text-[12px] leading-relaxed font-mono whitespace-pre-wrap">{codeLines.join('\n')}</pre>
+          </div>
+        );
+        continue;
+      }
+
+      if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+        renderedLines.push(<hr key={`hr-${idx}-${i}`} className="my-3 border-slate-200" />);
+        i++;
+        continue;
+      }
+
+      if (trimmed.startsWith('# ')) {
+        renderedLines.push(
+          <div key={`h1-${idx}-${i}`} className="mt-3 mb-3">
+            <h2 className="text-[28px] font-black text-slate-900 leading-tight tracking-tight">{trimmed.replace(/^#\s+/, '')}</h2>
+            <div className="w-16 h-1.5 bg-rose-500 mt-2 rounded-full"></div>
+          </div>
+        );
+        i++;
+        continue;
+      }
+
+      if (trimmed.startsWith('## ')) {
+        renderedLines.push(
+          <div key={`h2-${idx}-${i}`} className="mt-4 mb-3">
+            <h3 className="text-[24px] font-black text-slate-900 leading-tight tracking-tight">
+              {trimmed.replace(/^##\s+/, '')}
+            </h3>
+            <div className="w-12 h-1.5 bg-rose-500 mt-2 rounded-full"></div>
+          </div>
+        );
+        i++;
+        continue;
+      }
+
+      if (trimmed.startsWith('### ')) {
+        renderedLines.push(
+          <h4 key={`h3-${idx}-${i}`} className="text-[18px] font-black text-slate-800 mt-4 mb-2 leading-snug flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block"></span>
+            {trimmed.replace(/^###\s+/, '')}
+          </h4>
+        );
+        i++;
+        continue;
+      }
+
+      if (trimmed.startsWith('>')) {
+        const quoteLines: string[] = [];
+        while (i < lines.length && lines[i].trim().startsWith('>')) {
+          quoteLines.push(lines[i].trim().replace(/^>\s?/, ''));
+          i++;
+        }
+        renderedLines.push(
+          <blockquote key={`q-${idx}-${i}`} className="my-3 border-l-4 border-rose-200 bg-rose-50/40 px-3 py-2 text-slate-700 text-[14px] leading-[1.6] italic">
+            {quoteLines.map((q, qIdx) => (
+              <p key={qIdx}>{renderInlineMarkdown(q)}</p>
+            ))}
+          </blockquote>
+        );
+        continue;
+      }
+
+      if (/^[-*+]\s+/.test(trimmed)) {
+        const items: string[] = [];
+        while (i < lines.length && /^[-*+]\s+/.test(lines[i].trim())) {
+          items.push(lines[i].trim().replace(/^[-*+]\s+/, ''));
+          i++;
+        }
+        renderedLines.push(
+          <ul key={`ul-${idx}-${i}`} className="my-2 list-disc pl-6 text-slate-700 text-[15px] leading-[1.5] font-medium tracking-wide space-y-1">
+            {items.map((item, itemIdx) => (
+              <li key={itemIdx}>{renderInlineMarkdown(item, 'list')}</li>
+            ))}
+          </ul>
+        );
+        continue;
+      }
+
+      if (/^\d+\.\s+/.test(trimmed)) {
+        const items: string[] = [];
+        while (i < lines.length && /^\d+\.\s+/.test(lines[i].trim())) {
+          items.push(lines[i].trim().replace(/^\d+\.\s+/, ''));
+          i++;
+        }
+        renderedLines.push(
+          <ol key={`ol-${idx}-${i}`} className="my-2 list-decimal pl-6 text-slate-800 text-[15px] leading-[1.6] font-medium tracking-wide space-y-1">
+            {items.map((item, itemIdx) => (
+              <li key={itemIdx}>{renderInlineMarkdown(item, 'list')}</li>
+            ))}
+          </ol>
+        );
+        continue;
+      }
+
+      renderedLines.push(
+        <p key={`p-${idx}-${i}`} className="text-slate-700 text-[15px] leading-[1.5] font-medium text-justify tracking-wide mb-1 whitespace-pre-wrap">
+          {renderInlineMarkdown(trimmed)}
+        </p>
+      );
+      i++;
+    }
+
+    return <div key={idx} className="mb-4 last:mb-0">{renderedLines}</div>;
   };
 
   // --- RENDERERS BY TYPE ---

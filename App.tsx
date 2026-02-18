@@ -46,9 +46,11 @@ function App() {
   const [branding, setBranding] = useState<BrandingConfig>(initialBranding);
   const [activeSlideId, setActiveSlideId] = useState<string | null>(slides[0].id);
   const [error, setError] = useState<string | null>(null);
+  const [isOverflowFixing, setIsOverflowFixing] = useState(false);
   
   // Refs for the hidden export container
   const exportRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  const overflowFixPassRef = useRef(0);
 
   // Helper to re-calculate page numbers after add/delete
   const reindexSlides = (currentSlides: SlideData[]): SlideData[] => {
@@ -83,6 +85,8 @@ function App() {
     try {
       const generatedSlides = await generateSlidesFromText(inputText, manualTitle, manualSubtitle);
       setSlides(generatedSlides);
+      overflowFixPassRef.current = 0;
+      setIsOverflowFixing(true);
       if (generatedSlides.length > 0) {
         setActiveSlideId(generatedSlides[0].id);
       }
@@ -92,6 +96,131 @@ function App() {
       setIsGenerating(false);
     }
   };
+
+  const splitParagraphTail = (text: string): [string, string] | null => {
+    const source = text.trim();
+    if (!source) return null;
+
+    const segments = source.match(/[^，,。！？!?；;：:\n]+[，,。！？!?；;：:]?|[^\s]+/g) || [];
+    if (segments.length >= 2) {
+      const pivot = Math.max(1, Math.floor(segments.length * 0.7));
+      const head = segments.slice(0, pivot).join('').trim();
+      const tail = segments.slice(pivot).join('').trim();
+      if (head && tail) return [head, tail];
+    }
+
+    if (source.length < 8) return null;
+    const splitIndex = Math.floor(source.length * 0.72);
+    const head = source.slice(0, splitIndex).trim();
+    const tail = source.slice(splitIndex).trim();
+    if (!head || !tail) return null;
+    return [head, tail];
+  };
+
+  const applySingleOverflowFix = (currentSlides: SlideData[]): { changed: boolean; slides: SlideData[] } => {
+    const nextSlides = currentSlides.map(slide => ({
+      ...slide,
+      content: [...slide.content],
+      tags: slide.tags ? [...slide.tags] : slide.tags
+    }));
+
+    for (let i = 0; i < nextSlides.length; i++) {
+      const slide = nextSlides[i];
+      if (slide.type !== 'content') continue;
+
+      const element = exportRefs.current[slide.id];
+      if (!element) continue;
+
+      const contentArea = element.children[1] as HTMLElement | undefined;
+      if (!contentArea) continue;
+
+      const isOverflow = contentArea.scrollHeight > contentArea.clientHeight + 1;
+      if (!isOverflow) continue;
+
+      let carryText: string | null = null;
+
+      if (slide.content.length > 1) {
+        carryText = slide.content.pop() || null;
+      } else if (slide.content.length === 1) {
+        const split = splitParagraphTail(slide.content[0]);
+        if (!split) continue;
+        slide.content = [split[0]];
+        carryText = split[1];
+      }
+
+      if (!carryText) continue;
+
+      let nextContentIndex = -1;
+      for (let j = i + 1; j < nextSlides.length; j++) {
+        if (nextSlides[j].type === 'content') {
+          nextContentIndex = j;
+          break;
+        }
+      }
+
+      if (nextContentIndex !== -1) {
+        nextSlides[nextContentIndex].content = [carryText, ...nextSlides[nextContentIndex].content];
+      } else {
+        nextSlides.splice(i + 1, 0, {
+          id: `auto-carry-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          type: 'content',
+          title: '',
+          content: [carryText],
+          category: slide.category,
+          tags: slide.tags ? [...slide.tags] : undefined,
+        });
+      }
+
+      return { changed: true, slides: reindexSlides(nextSlides) };
+    }
+
+    return { changed: false, slides: currentSlides };
+  };
+
+  useEffect(() => {
+    if (!isOverflowFixing) return;
+
+    let cancelled = false;
+
+    const runOverflowFix = async () => {
+      overflowFixPassRef.current += 1;
+      if (overflowFixPassRef.current > 30) {
+        setIsOverflowFixing(false);
+        return;
+      }
+
+      const fonts = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts;
+      if (fonts?.ready) {
+        await Promise.race([
+          fonts.ready,
+          new Promise(resolve => setTimeout(resolve, 1200))
+        ]);
+      }
+
+      // Wait one paint frame for hidden export container refs/layout to settle.
+      await new Promise(resolve => setTimeout(resolve, 32));
+      if (cancelled) return;
+
+      const hasContentSlides = slides.some(s => s.type === 'content');
+      if (!hasContentSlides) {
+        setIsOverflowFixing(false);
+        return;
+      }
+
+      const result = applySingleOverflowFix(slides);
+      if (!result.changed) {
+        setIsOverflowFixing(false);
+        return;
+      }
+
+      setSlides(result.slides);
+    };
+
+    runOverflowFix();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOverflowFixing, slides]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'logoUrl' | 'logoUrlDark') => {
     const file = e.target.files?.[0];

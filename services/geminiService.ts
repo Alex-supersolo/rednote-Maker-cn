@@ -25,12 +25,25 @@ export const generateSlidesFromText = async (rawText: string, customTitle?: stri
     // --- DOM measured pagination ---
     // Pagination decisions are based on real browser layout to minimize overflow.
     const MAX_CONTENT_HEIGHT_PX = 452;
-    const SAFETY_BUFFER_PX = 18;
+    const SAFETY_BUFFER_PX = 24;
     const MAX_USABLE_HEIGHT = MAX_CONTENT_HEIGHT_PX - SAFETY_BUFFER_PX;
 
     const splitIntoSentences = (text: string): string[] => {
       const matches = text.match(/[^。！？.!?]+[。！？.!?]+|[^。！？.!?]+$/g);
       return (matches || [text]).map(s => s.trim()).filter(Boolean);
+    };
+
+    const waitForFontsReady = async () => {
+      const fonts = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts;
+      if (!fonts?.ready) return;
+      try {
+        await Promise.race([
+          fonts.ready,
+          new Promise((resolve) => setTimeout(resolve, 1500)),
+        ]);
+      } catch {
+        // ignore font readiness failure and continue with best effort
+      }
     };
 
     const isTableBlock = (text: string): boolean => {
@@ -137,6 +150,7 @@ export const generateSlidesFromText = async (rawText: string, customTitle?: stri
         p.style.letterSpacing = '0.01em';
         p.style.color = /^\d+\./.test(trimmed) ? 'rgb(30 41 59)' : 'rgb(51 65 85)';
         p.style.whiteSpace = 'pre-wrap';
+        p.style.textAlign = 'justify';
         appendRichLine(p, trimmed, numbered);
         block.appendChild(p);
       }
@@ -254,6 +268,7 @@ export const generateSlidesFromText = async (rawText: string, customTitle?: stri
       content: ["Summary"],
       category: "Category"
     };
+    await waitForFontsReady();
     const measureRoot = createMeasureArea();
     const paginateParagraphs = (paragraphs: string[]): string[][] => {
       const pages: string[][] = [];
