@@ -167,6 +167,24 @@ function App() {
 
     const zip = new JSZip();
     const folder = zip.folder("rednote-slides");
+
+    const waitForFontsReady = async () => {
+      const fonts = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts;
+      if (fonts?.ready) {
+        await fonts.ready;
+      }
+    };
+
+    const waitForImagesReady = async (root: HTMLElement) => {
+      const images = Array.from(root.querySelectorAll('img'));
+      await Promise.all(images.map(async (img) => {
+        if (img.complete && img.naturalWidth > 0) return;
+        await new Promise<void>((resolve) => {
+          img.addEventListener('load', () => resolve(), { once: true });
+          img.addEventListener('error', () => resolve(), { once: true });
+        });
+      }));
+    };
     
     // Brief delay to ensure rendering is settled
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -184,6 +202,9 @@ function App() {
         if (element) {
           try {
             console.log(`[Export] Capturing slide ${i + 1}...`);
+            await waitForFontsReady();
+            await waitForImagesReady(element);
+            await new Promise(resolve => setTimeout(resolve, 50));
             
             // html-to-image uses SVG foreignObject which renders much more accurately than html2canvas
             const blob = await toBlob(element, {

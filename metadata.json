@@ -1,5 +1,5 @@
 {
   "name": "RedNote Maker",
-  "description": "Transform raw text into professional Xiaohongshu (Little Red Book) style carousel slides using Gemini AI.",
+  "description": "Transform raw text into professional Xiaohongshu (Little Red Book) style carousel slides using DeepSeek AI.",
   "requestFramePermissions": []
 }

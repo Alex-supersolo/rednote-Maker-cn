@@ -23,13 +23,14 @@ const SlideRenderer = forwardRef<HTMLDivElement, SlideRendererProps>(({ data, br
     transform: scale !== 1 ? `scale(${scale})` : undefined,
     transformOrigin: 'top left',
     boxSizing: 'border-box',
+    fontFamily: '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   };
 
   // --- COMPONENTS ---
 
   // Standard Header with distinct background (Gray bg, 84px height)
   const ContentHeader = () => (
-    <div className="w-full h-[84px] px-8 flex items-center justify-between shrink-0 bg-slate-50 border-b border-slate-100 z-20">
+    <div className="w-full h-[84px] px-8 flex items-center justify-between shrink-0 bg-white z-20">
       <div className="flex items-center gap-3">
         {branding.logoUrl ? (
           <img src={branding.logoUrl} alt="Logo" className="h-[28px] w-auto object-contain" crossOrigin="anonymous" />
@@ -77,7 +78,7 @@ const SlideRenderer = forwardRef<HTMLDivElement, SlideRendererProps>(({ data, br
 
   const Footer = ({ pageInfo = false, light = false, centered = false }: { pageInfo?: boolean; light?: boolean; centered?: boolean }) => (
     <div className={`w-full px-12 shrink-0 ${light ? '' : 'bg-white'} mt-auto z-10 py-5`}>
-      <div className={`pt-2 flex ${centered ? 'justify-center' : 'justify-between'} items-center ${pageInfo ? 'border-t border-slate-100' : ''}`}>
+      <div className={`pt-2 flex ${centered ? 'justify-center' : 'justify-between'} items-center`}>
         <span className={`text-[11px] font-bold tracking-[0.3em] uppercase leading-none truncate ${centered ? 'max-w-full' : 'max-w-[260px]'} ${light ? 'text-white/80' : (pageInfo ? 'text-slate-900' : 'text-slate-400')}`}>
           {pageInfo ? (data.category || branding.footerSlogan) : branding.footerSlogan}
         </span>
@@ -132,10 +133,12 @@ const SlideRenderer = forwardRef<HTMLDivElement, SlideRendererProps>(({ data, br
     const lines = text.split('\n');
 
     return (
-      <div key={idx} className="mb-5 last:mb-0">
+      <div key={idx} className="mb-4 last:mb-0">
         {lines.map((line, lineIdx) => {
           const trimmed = line.trim();
-          if (!trimmed) return null;
+          if (!trimmed) {
+            return <div key={lineIdx} className="h-4" />;
+          }
 
           // Header H3
           if (trimmed.startsWith('## ')) {
@@ -160,7 +163,7 @@ const SlideRenderer = forwardRef<HTMLDivElement, SlideRendererProps>(({ data, br
           // Numbered List
           if (/^\d+\./.test(trimmed)) {
             return (
-              <p key={lineIdx} className="text-slate-800 text-[15px] leading-[1.6] font-medium text-justify tracking-wide mb-2 pl-0 whitespace-pre-wrap">
+              <p key={lineIdx} className="text-slate-800 text-[15px] leading-[1.6] font-medium text-justify tracking-wide mb-1 pl-0 whitespace-pre-wrap">
                 {trimmed.split(/(\*\*.*?\*\*)/).map((part, i) =>
                   part.startsWith('**') && part.endsWith('**') ?
                     <span key={i} className="font-extrabold text-black">{part.slice(2, -2)}</span> :
