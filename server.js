@@ -96,6 +96,47 @@ async function callDeepSeek(text, systemInstruction) {
     }
 }
 
+function normalizeTextForIntegrityCheck(input) {
+    return String(input || '')
+        .replace(/\r/g, '')
+        // Strip common markdown control chars that may be introduced by formatter.
+        .replace(/[`*_~>#\[\]\(\)]/g, '')
+        .replace(/\s+/g, '');
+}
+
+function extractMarkdownParagraphsFromAiResult(aiResultRaw) {
+    if (!Array.isArray(aiResultRaw)) return [];
+    return aiResultRaw
+        .map(item => (typeof item === 'string' ? item : ''))
+        .map(item => item.trim())
+        .filter(Boolean);
+}
+
+function hasMarkdownFormatting(paragraphs) {
+    const markdownPattern = /(^|\n)\s{0,3}(#{1,6}\s|[-+*]\s|\d+\.\s|>\s)|\*\*[^*]+\*\*|`[^`]+`|~~[^~]+~~|\[[^\]]+\]\([^)]+\)/m;
+    return paragraphs.some(p => markdownPattern.test(p));
+}
+
+function splitIntoSentencesKeepingOrder(text) {
+    return (text.match(/[^。！？.!?]+[。！？.!?]+|[^。！？.!?]+$/g) || [text])
+        .map(s => s.trim())
+        .filter(Boolean);
+}
+
+function forceMarkdownFallback(rawText) {
+    const blocks = String(rawText || '').split(/\n+/).map(s => s.trim()).filter(Boolean);
+    if (blocks.length === 0) return [];
+
+    return blocks.map(block => {
+        const sentences = splitIntoSentencesKeepingOrder(block);
+        if (sentences.length <= 1) return block;
+
+        const head = `**${sentences[0]}**`;
+        const body = sentences.slice(1).join('\n');
+        return body ? `${head}\n${body}` : head;
+    });
+}
+
 // --- ROUTE ---
 
 app.post('/api/generate', async (req, res) => {
@@ -106,8 +147,10 @@ app.post('/api/generate', async (req, res) => {
         console.log(`[API] Request received. Using DeepSeek for all requests.`);
 
         // 2. Prepare Prompt for METADATA ONLY
-        const safeTitle = title || 'Main Title';
-        const safeSubtitle = subtitle || 'Summary';
+        const manualTitle = typeof title === 'string' ? title.trim() : '';
+        const manualSubtitle = typeof subtitle === 'string' ? subtitle.trim() : '';
+        const safeTitle = manualTitle || 'Main Title';
+        const safeSubtitle = manualSubtitle || 'Summary';
 
         const METADATA_INSTRUCTION = `
 You are a creative metadata generator for "Little Red Book" (Xiaohongshu).
@@ -142,27 +185,67 @@ CRITICAL:
             metadata = aiResultRaw || {};
         }
 
-        // 4. MANUAL CONTENT SPLITTING (Verbatim Mode)
-        // Split by newline, filter empty
-        const rawParagraphs = text.split(/\n+/).filter(line => line.trim().length > 0);
+        // 4. TEXT -> MARKDOWN FORMAT (NO TEXT MUTATION)
+        const MARKDOWN_FORMAT_INSTRUCTION = `
+You are a strict markdown formatter.
+Your task is to format the input text into a JSON ARRAY of markdown paragraph strings.
 
-        // 5. Construct Final Slide Data
+CRITICAL RULES:
+1. You MUST NOT change, delete, replace, summarize, or reorder any original text character.
+2. You MAY ONLY add markdown syntax and line breaks/spaces for structure:
+   - headings (#, ##, ###)
+   - emphasis (**bold**, *italic*)
+   - list markers (-, 1.)
+   - blockquote (>)
+   - separators (---)
+3. Keep all original text content in the exact original sequence.
+4. Do NOT invent titles, tags, or any new words.
+5. Return JSON ARRAY ONLY.
+`;
+
+        let markdownParagraphs = [];
+        try {
+            const markdownRaw = await callDeepSeek(text, MARKDOWN_FORMAT_INSTRUCTION);
+            const candidateParagraphs = extractMarkdownParagraphsFromAiResult(markdownRaw);
+            const candidateJoined = candidateParagraphs.join('\n');
+
+            const originalNormalized = normalizeTextForIntegrityCheck(text);
+            const candidateNormalized = normalizeTextForIntegrityCheck(candidateJoined);
+
+            if (candidateParagraphs.length > 0 && candidateNormalized === originalNormalized) {
+                markdownParagraphs = candidateParagraphs;
+            } else {
+                console.warn('[API] Markdown formatting integrity check failed, fallback to raw paragraphs.');
+            }
+        } catch (e) {
+            console.warn('[API] Markdown formatting failed, fallback to raw paragraphs.', e);
+        }
+
+        // 5. Fallback: manual paragraph splitting / forced markdown if formatter not usable.
+        const rawParagraphs = text.split(/\n+/).filter(line => line.trim().length > 0);
+        let contentParagraphs = markdownParagraphs.length > 0 ? markdownParagraphs : rawParagraphs;
+        if (!hasMarkdownFormatting(contentParagraphs)) {
+            contentParagraphs = forceMarkdownFallback(text);
+        }
+
+        // 6. Construct Final Slide Data
         // Slide 1: Cover
         const coverSlide = {
             type: 'cover',
-            title: metadata.title || safeTitle,
-            subtitle: metadata.subtitle || safeSubtitle,
+            // User-entered title has highest priority.
+            title: manualTitle || metadata.title || safeTitle,
+            subtitle: manualSubtitle || metadata.subtitle || safeSubtitle,
             category: metadata.category || "Knowledge",
             tags: metadata.tags || ["干货"],
             content: [metadata.quote || rawParagraphs[0] || "Summary"]
         };
 
         // Slide 2+: Content (Verbatim Paragraphs)
-        const contentSlides = rawParagraphs.map(para => ({
+        const contentSlides = contentParagraphs.map(para => ({
             type: 'content',
             title: "", // Empty for content pages
             category: coverSlide.category,
-            content: [para] // Wrapping the raw verbatim paragraph
+            content: [para] // Markdown formatted or raw fallback paragraph
         }));
 
         const finalResult = [coverSlide, ...contentSlides];
