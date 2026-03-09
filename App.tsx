@@ -18,6 +18,8 @@ const initialBranding: BrandingConfig = {
   logoUrlDark: 'https://cdn-icons-png.flaticon.com/512/3135/3135768.png', // White/Light infinity-like icon
 };
 
+const BRANDING_LOGO_STORAGE_KEY = 'rednote:branding:logo:v1';
+
 // Placeholder data for initial view
 const placeholderSlides: SlideData[] = [
   {
@@ -51,6 +53,32 @@ function App() {
   // Refs for the hidden export container
   const exportRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const overflowFixPassRef = useRef(0);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(BRANDING_LOGO_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<BrandingConfig>;
+      setBranding(prev => ({
+        ...prev,
+        logoUrl: typeof parsed.logoUrl === 'string' ? parsed.logoUrl : prev.logoUrl,
+        logoUrlDark: typeof parsed.logoUrlDark === 'string' ? parsed.logoUrlDark : prev.logoUrlDark,
+      }));
+    } catch (e) {
+      console.warn('[Branding] Failed to load logo cache from localStorage.', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(BRANDING_LOGO_STORAGE_KEY, JSON.stringify({
+        logoUrl: branding.logoUrl,
+        logoUrlDark: branding.logoUrlDark,
+      }));
+    } catch (e) {
+      console.warn('[Branding] Failed to persist logo cache to localStorage.', e);
+    }
+  }, [branding.logoUrl, branding.logoUrlDark]);
 
   // Helper to re-calculate page numbers after add/delete
   const reindexSlides = (currentSlides: SlideData[]): SlideData[] => {
