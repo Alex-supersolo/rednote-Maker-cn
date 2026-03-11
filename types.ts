@@ -1,7 +1,14 @@
 
 export type SlideType = 'cover' | 'content' | 'promo';
 
-export type CoverStyle = 'classic' | 'immersive' | 'glass' | 'frame';
+export type CoverStyle =
+  | 'classic'
+  | 'immersive'
+  | 'glass'
+  | 'frame'
+  | 'editorial'
+  | 'briefing'
+  | 'manifesto';
 
 export interface SlideData {
   id: string;

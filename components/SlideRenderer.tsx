@@ -318,11 +318,60 @@ const SlideRenderer = forwardRef<HTMLDivElement, SlideRendererProps>(({ data, br
     return <div key={idx} className="mb-4 last:mb-0">{renderedLines}</div>;
   };
 
+  const normalizeOutlineText = (text: string) =>
+    text
+      .trim()
+      .replace(/^#{1,6}\s+/, '')
+      .replace(/^>\s?/, '')
+      .replace(/^[-*+]\s+/, '')
+      .replace(/^\d+\.\s+/, '')
+      .replace(/[*_`~]/g, '')
+      .trim();
+
+  const getCoverOutlineItems = () => {
+    const rawBlocks = (data.content || []).map(block => block.trim()).filter(Boolean);
+    const merged = rawBlocks.join('\n').trim();
+
+    if (!merged) {
+      return data.subtitle?.trim()
+        ? [data.subtitle.trim()]
+        : ['在左侧输入正文后，这里会自动提炼大纲'];
+    }
+
+    const markdownListItems = merged
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => /^[-*+]\s+/.test(line) || /^\d+\.\s+/.test(line))
+      .map(normalizeOutlineText)
+      .filter(Boolean);
+    if (markdownListItems.length > 0) {
+      return markdownListItems.slice(0, 5);
+    }
+
+    const lineItems = merged
+      .split('\n')
+      .map(normalizeOutlineText)
+      .filter(Boolean);
+    if (lineItems.length > 1) {
+      return lineItems.slice(0, 5);
+    }
+
+    const sentenceItems = (merged.match(/[^。！？!?；;]+[。！？!?；;]?/g) || [])
+      .map(normalizeOutlineText)
+      .filter(Boolean);
+    if (sentenceItems.length > 1) {
+      return sentenceItems.slice(0, 5);
+    }
+
+    return [normalizeOutlineText(merged)].filter(Boolean);
+  };
+
   // --- RENDERERS BY TYPE ---
 
   const renderCover = () => {
     const style = data.coverStyle || 'classic';
     const titleSize = data.titleFontSize || 48;
+    const outlineItems = getCoverOutlineItems();
 
     // --- 1. CLASSIC STYLE (Split 60/40) ---
     if (style === 'classic') {
@@ -527,6 +576,159 @@ const SlideRenderer = forwardRef<HTMLDivElement, SlideRendererProps>(({ data, br
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- 5. EDITORIAL STYLE (Text-Only, Magazine Layout) ---
+    if (style === 'editorial') {
+      return (
+        <div ref={ref} style={containerStyle} className="shadow-2xl bg-[#f6f4ee] relative">
+          <div
+            className="absolute inset-0 opacity-30"
+            style={{
+              backgroundImage: 'repeating-linear-gradient(0deg, rgba(15,23,42,0.05) 0px, rgba(15,23,42,0.05) 1px, transparent 1px, transparent 26px)'
+            }}
+          />
+          <div className="relative z-10 h-full flex flex-col px-8 pt-6 pb-5">
+            <div className="shrink-0 h-[84px]">
+              <CoverHeader />
+            </div>
+
+            <div className="flex-1 pt-4 flex flex-col">
+              <div className="text-[10px] font-black tracking-[0.28em] text-slate-500 uppercase mb-4">
+                {data.category || 'Editorial Cover'}
+              </div>
+              <h1 className="text-slate-900 font-black leading-[1.05] tracking-tight whitespace-pre-wrap" style={{ fontSize: `${Math.max(38, titleSize * 0.9)}px` }}>
+                {data.title}
+              </h1>
+              <div className="w-16 h-[3px] bg-rose-500 rounded-full my-4" />
+              <p className="text-slate-600 text-[15px] font-semibold leading-relaxed whitespace-pre-wrap">
+                {data.subtitle || 'SUBTITLE'}
+              </p>
+
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-white/80 shadow-sm p-5">
+                <div className="text-[11px] font-black tracking-[0.22em] text-slate-500 uppercase mb-3">正文提炼大纲</div>
+                <ol className="space-y-2.5">
+                  {outlineItems.slice(0, 4).map((item, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <span className="font-mono text-[11px] font-bold text-rose-600 bg-rose-50 border border-rose-100 rounded px-1.5 py-0.5 mt-0.5">
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <span className="text-[14px] leading-[1.55] text-slate-800 font-medium">{item}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-300">
+              <p className="text-[11px] text-slate-500 font-bold tracking-[0.24em] uppercase">{branding.footerSlogan}</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- 6. BRIEFING STYLE (Text-Only, Executive Brief) ---
+    if (style === 'briefing') {
+      return (
+        <div ref={ref} style={containerStyle} className="shadow-2xl bg-slate-950 relative text-white">
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800" />
+          <div
+            className="absolute inset-0 opacity-35"
+            style={{
+              backgroundImage:
+                'linear-gradient(rgba(148,163,184,0.14) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.14) 1px, transparent 1px)',
+              backgroundSize: '26px 26px'
+            }}
+          />
+          <div className="relative z-10 h-full flex flex-col px-8 pt-6 pb-5">
+            <div className="shrink-0 h-[84px]">
+              <CoverHeader dark />
+            </div>
+
+            <div className="flex-1 pt-4 flex flex-col">
+              <div className="inline-flex items-center gap-2 w-fit px-2.5 py-1 text-[10px] font-black tracking-[0.18em] uppercase border border-white/20 bg-white/10 rounded-md mb-4">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                {data.category || 'Briefing'}
+              </div>
+              <h1 className="font-black leading-[1.06] tracking-tight whitespace-pre-wrap text-white" style={{ fontSize: `${Math.max(36, titleSize * 0.86)}px` }}>
+                {data.title}
+              </h1>
+              <p className="mt-4 text-[15px] leading-relaxed text-slate-200 font-medium whitespace-pre-wrap">
+                {data.subtitle || 'SUBTITLE'}
+              </p>
+
+              <div className="mt-6 rounded-2xl border border-white/20 bg-white/[0.08] backdrop-blur-sm px-5 py-4">
+                <div className="text-[11px] font-black tracking-[0.22em] text-slate-300 uppercase mb-3">正文提炼大纲</div>
+                <ul className="space-y-2">
+                  {outlineItems.slice(0, 4).map((item, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <span className="mt-1 w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
+                      <span className="text-[14px] text-slate-100 leading-[1.55]">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-white/15">
+              <p className="text-[11px] text-slate-300 font-bold tracking-[0.24em] uppercase">{branding.footerSlogan}</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- 7. MANIFESTO STYLE (Text-Only, Statement Layout) ---
+    if (style === 'manifesto') {
+      return (
+        <div ref={ref} style={containerStyle} className="shadow-2xl bg-white text-slate-900">
+          <div className="h-full flex flex-col px-8 pt-6 pb-5">
+            <div className="shrink-0 h-[84px]">
+              <CoverHeader />
+            </div>
+
+            <div className="flex-1 pt-4 grid grid-cols-[1fr_118px] gap-5">
+              <div className="flex flex-col">
+                <div className="text-[10px] font-black tracking-[0.24em] text-slate-400 uppercase mb-3">
+                  {data.category || 'Manifesto'}
+                </div>
+                <h1 className="font-black leading-[1.06] tracking-tight whitespace-pre-wrap text-slate-900" style={{ fontSize: `${Math.max(36, titleSize * 0.88)}px` }}>
+                  {data.title}
+                </h1>
+                <p className="mt-4 text-[15px] leading-relaxed font-semibold text-slate-600 whitespace-pre-wrap">
+                  {data.subtitle || 'SUBTITLE'}
+                </p>
+
+                <div className="mt-5 border-t-2 border-slate-900 pt-4">
+                  <div className="text-[11px] font-black tracking-[0.22em] text-slate-500 uppercase mb-3">正文提炼大纲</div>
+                  <div className="space-y-2.5">
+                    {outlineItems.slice(0, 4).map((item, i) => (
+                      <div key={i} className="pl-3 border-l-2 border-slate-200">
+                        <div className="text-[10px] font-mono text-slate-400 mb-1">POINT {i + 1}</div>
+                        <p className="text-[14px] leading-[1.55] text-slate-800 font-medium">{item}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-l border-slate-200 pl-4 flex flex-col">
+                <div className="text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase mb-3">Tags</div>
+                <div className="space-y-2">
+                  {(data.tags && data.tags.length > 0 ? data.tags : ['洞察', '结构', '表达']).slice(0, 4).map((tag, i) => (
+                    <div key={i} className="text-[12px] font-bold text-slate-700 break-words">#{tag}</div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-200">
+              <p className="text-[11px] text-slate-500 font-bold tracking-[0.24em] uppercase">{branding.footerSlogan}</p>
             </div>
           </div>
         </div>

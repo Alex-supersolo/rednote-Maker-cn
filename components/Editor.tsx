@@ -1,6 +1,6 @@
 import React from 'react';
 import { SlideData, CoverStyle } from '../types';
-import { Trash2, Plus, Sparkles, Tag, FilePlus, Type, LayoutTemplate, Square, Image as ImageIcon, Frame } from 'lucide-react';
+import { Trash2, Plus, Sparkles, Tag, FilePlus, Type, LayoutTemplate, Square, Image as ImageIcon, Frame, FileText, List, LibraryBig } from 'lucide-react';
 
 interface EditorProps {
   slides: SlideData[];
@@ -194,11 +194,14 @@ const Editor: React.FC<EditorProps> = ({
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-2 flex items-center gap-1">
                   <LayoutTemplate size={12} /> Cover Style
                 </label>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <StyleButton style="classic" label="Classic" icon={LayoutTemplate} />
                   <StyleButton style="immersive" label="Full" icon={ImageIcon} />
                   <StyleButton style="glass" label="Glass" icon={Square} />
                   <StyleButton style="frame" label="Frame" icon={Frame} />
+                  <StyleButton style="editorial" label="Editorial" icon={FileText} />
+                  <StyleButton style="briefing" label="Briefing" icon={List} />
+                  <StyleButton style="manifesto" label="Manifesto" icon={LibraryBig} />
                 </div>
               </div>
             )}
